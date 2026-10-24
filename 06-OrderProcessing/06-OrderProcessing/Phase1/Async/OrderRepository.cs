@@ -1,4 +1,5 @@
-﻿using _06_OrderProcessing.Shared.Models;
+﻿using _06_OrderProcessing.Shared.Exceptions;
+using _06_OrderProcessing.Shared.Models;
 using _06_OrderProcessing.Shared.Storage;
 
 namespace _06_OrderProcessing.Phase1.Async;
@@ -6,14 +7,23 @@ namespace _06_OrderProcessing.Phase1.Async;
 public class OrderRepository
 {
     private readonly JsonFileStore _store;
+    private readonly HashSet<int> _failSaveForOrderIds;
 
-    public OrderRepository(JsonFileStore store)
+    public OrderRepository(JsonFileStore store , IEnumerable<int>? failSaveForOrderIds = null)
     {
         _store = store;
+        _failSaveForOrderIds = new HashSet<int>(
+            failSaveForOrderIds ?? Enumerable.Empty<int>());
     }
 
     public async Task SaveAsync(Order order, CancellationToken ct)
     {
+        if (order.Status == OrderStatus.Completed &&
+            _failSaveForOrderIds.Contains(order.Id))
+        {
+            throw new DatabaseWriteException("Connection lost during commit");
+        }
+
         await _store.UpdateAsync<Order>(DataFiles.Orders,
             
             orders =>

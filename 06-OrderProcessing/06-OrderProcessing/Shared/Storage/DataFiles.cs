@@ -15,4 +15,5 @@ public static class DataFiles
     public const string Payments = "payments.json";
     public const string Emails = "emails.json";
     public const string EmailRetry = "email_retry.json";
+    public const string InvoicesDirectory = "invoices";
 }

@@ -15,7 +15,7 @@ public class ProductRepository
     {
         _store = store;
     }
-    public async Task<Product?> GetByIdAsync(int id, CancellationToken ct)
+         public async Task<Product?> GetByIdAsync(int id, CancellationToken ct)
     {
         Log.Info("ProductRepository", "Opening connection...");
         await Task.Delay(200, ct);
@@ -45,7 +45,7 @@ public class ProductRepository
 
         return product;
     }
-        public async Task<bool> ReserveStockAsync(int productId, int qty, CancellationToken ct)
+         public async Task<bool> ReserveStockAsync(int productId, int qty, CancellationToken ct)
         {
           bool reserved = false;
 
@@ -68,9 +68,90 @@ public class ProductRepository
           },ct);
 
         return reserved;
+    }
+         public async Task ReleaseStockAsync(int productId, int qty,CancellationToken ct)
+        {
+        if (qty <= 0)
+            return;
+
+        await _store.UpdateAsync<Product>(
+            DataFiles.Products,
+            products =>
+            {
+                foreach (Product product in products)
+                {
+                    if (product.Id != productId)
+                        continue;
+
+                    product.StockQuantity += qty;
+                    return;
+                }
+            },
+            ct);
         }
+         public async Task<bool> ReserveStockUnsafeAsync(int productId, int qty,CancellationToken ct)
+       {
+        List<Product> products =
+            await _store.ReadAsync<Product>(DataFiles.Products, ct);
+
+        Product? product = null;
+
+        foreach (Product item in products)
+        {
+            if (item.Id == productId)
+            {
+                product = item;
+                break;
+            }
+        }
+
+        if (product is null || qty <= 0 || product.StockQuantity < qty)
+            return false;
+
+        int currentStock = product.StockQuantity;
+
+        await Task.Delay(200, ct); // Simulate opening a connection
+        await Task.Delay(100, ct); // Simulate beginning a transaction
+        await Task.Delay(400, ct); // Simulate updating the stock
+
+        await _store.UpdateAsync<Product>(
+            DataFiles.Products,
+            items =>
+            {
+                foreach (Product item in items)
+                {
+                    if (item.Id == productId)
+                    {
+                        item.StockQuantity = currentStock - qty;
+                        return;
+                    }
+                }
+            },
+            ct);
+
+        return true;
+    }
+         public async Task<List<Product>> GetAllAsync(CancellationToken ct)
+         {
+           Log.Info("ProductRepository", "Loading all products...");
+
+           await Task.Delay(200, ct);
+ 
+            List<Product> products =
+            await _store.ReadAsync<Product>(DataFiles.Products, ct);
+
+            Log.Success(
+            "ProductRepository",
+            $"Loaded {products.Count} products.");
+
+           return products;
+         }
+
+
+
+
 }
-     
+
 
 
 

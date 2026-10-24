@@ -29,6 +29,8 @@ public class Phase1Runner
 
     public async Task RunAsync(CancellationToken ct = default)
     {
+        await DataSeeder.ResetAsync(ct);
+
         List<Order> incomingOrders =
             await _incomingRepository.GetAllAsync(ct);
 
@@ -58,7 +60,6 @@ public class Phase1Runner
         foreach (Order order in incomingOrders)
         {
             await _asyncValidator.ValidateOrderAsync(order, ct);
-            await _orderRepository.SaveAsync(order, ct);
         }
 
         asyncWatch.Stop();

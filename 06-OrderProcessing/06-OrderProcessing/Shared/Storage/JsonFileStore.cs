@@ -1,4 +1,5 @@
-﻿using _06_OrderProcessing.Shared.Exceptions;
+﻿using _06_OrderProcessing.Shared.AppLogger;
+using _06_OrderProcessing.Shared.Exceptions;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
@@ -189,7 +190,26 @@ public class JsonFileStore
         {
             await File.WriteAllTextAsync(tempPath, json, System.Text.Encoding.UTF8, token);
 
-            File.Move(tempPath, filePath, overwrite: true);
+            //Console.WriteLine($"Temp path: {tempPath}");
+            //Console.WriteLine($"Target path: {filePath}");
+
+            try
+            {
+                //Console.WriteLine(
+                //     $"Temp exists: {File.Exists(tempPath)}, " +
+                //     $"Target exists: {File.Exists(filePath)}, " +
+                //     $"Target is directory: {Directory.Exists(filePath)}");
+
+                File.Move(tempPath, filePath, overwrite: true);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                Log.Error(
+                    "JsonFileStore",
+                    $"Cannot replace '{filePath}'. Temp file: '{tempPath}'. Error: {ex.Message}");
+
+                throw;
+            }
         }
         finally
         {
