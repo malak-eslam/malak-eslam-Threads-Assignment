@@ -26,6 +26,8 @@ public class EmailService : IEmailService
         Customer customer,
         CancellationToken ct)
     {
+        await Task.Delay(1000, ct);
+
         int attempt = _attemptCounts.AddOrUpdate(
             order.Id,
             1,

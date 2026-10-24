@@ -1,123 +1,119 @@
 ﻿using _06_OrderProcessing.Phase1;
 using _06_OrderProcessing.Phase1.Async;
-using _06_OrderProcessing.Shared.AppLogger;
-using _06_OrderProcessing.Shared.Models;
+using _06_OrderProcessing.Phase2;
+using _06_OrderProcessing.Phase3;
+using _06_OrderProcessing.Phase4;
 using _06_OrderProcessing.Shared.Storage;
-using System;
-
-#region Reset data to its initial state before testing.
-await DataSeeder.ResetAsync(CancellationToken.None);
-
-Console.WriteLine("Data seeding completed.");
-#endregion
 
 var store = new JsonFileStore();
 
-#region Test cancellation token.
 using var cts = new CancellationTokenSource();
-CancellationToken ct = cts.Token;
-#endregion
 
-#region Product Test
-var productRepository = new ProductRepository(store);
+Console.CancelKeyPress += (_, e) =>
+{
+    e.Cancel = true;
+    cts.Cancel();
+    Console.WriteLine("\nCancellation requested...");
+};
 
-//Console.WriteLine("=== Product Test ===");
+string? mode = args.FirstOrDefault()?.ToLowerInvariant();
 
-//Product? product = await productRepository.GetByIdAsync(1, ct);
+if (mode is null)
+{
+    Console.WriteLine("=== Order Processing System ===");
+    Console.WriteLine("1. Phase 1");
+    Console.WriteLine("2. Phase 2");
+    Console.WriteLine("3. Phase 3");
+    Console.WriteLine("4. Phase 4");
+    Console.Write("Choose a phase: ");
 
-//if (product is not null)
-//{
-//    Console.WriteLine($"Stock before: {product.StockQuantity}");
+    mode = Console.ReadLine()?.Trim() switch
+    {
+        "1" => "phase1",
+        "2" => "phase2",
+        "3" => "phase3",
+        "4" => "phase4",
+        _ => "unknown"
+    };
+}
 
-//    bool reserved = await productRepository.ReserveStockAsync(1, 1, ct);
+try
+{
+    switch (mode)
+    {
+        case "phase1":
+            {
+                var productRepository = new ProductRepository(store);
+                var customerRepository = new CustomerRepository(store);
+                var couponRepository = new CouponRepository(store);
+                var orderRepository = new OrderRepository(store);
+                var incomingOrderRepository = new IncomingOrderRepository(store);
 
-//    if (reserved)
-//        Log.Success("Program", "Reservation successful.");
-//    else
-//        Log.Error("Program", "Reservation failed.");
+                var asyncValidator = new OrderValidator(
+                    customerRepository,
+                    productRepository,
+                    couponRepository,
+                    orderRepository);
 
-//    Product? updatedProduct = await productRepository.GetByIdAsync(1, ct);
+                var syncCustomerRepository = new SyncCustomerRepository(store);
+                var syncProductRepository = new SyncProductRepository(store);
+                var syncCouponRepository = new SyncCouponRepository(store);
 
-//    if (updatedProduct is not null)
-//        Console.WriteLine($"Stock after: {updatedProduct.StockQuantity}");
-//}
-#endregion
+                var syncValidator = new SyncOrderValidator(
+                    syncCustomerRepository,
+                    syncProductRepository,
+                    syncCouponRepository);
 
-# region Test retrieving multiple customers.
-var customerRepository = new CustomerRepository(store);
+                var runner = new Phase1Runner(
+                    store,
+                    incomingOrderRepository,
+                    orderRepository,
+                    syncValidator,
+                    asyncValidator);
 
-//Console.WriteLine("\n=== Customer Test ===");
+                await runner.RunAsync(cts.Token);
+                break;
+            }
 
-//for (int id = 1; id <= 3; id++)
-//{
-//    Customer? customer = await customerRepository.GetByIdAsync(id, ct);
+        case "phase2":
+            await new Phase2Runner().RunAsync(cts.Token);
+            break;
 
-//    if (customer is not null)
-//    {
-//        Log.Success("Program", $"Customer found: {customer.Name}");
-//    }
-//    else
-//    {
-//        Log.Error("Program", $"Customer #{id} not found.");
-//    }
-//}
-#endregion
+        case "phase3":
+            await new Phase3Runner().RunAsync(cts.Token);
+            break;
 
-# region Test concurrent reservations for the last available stock.
-//int productId = 3;
-//int quantity = 2;
+        case "phase4":
+            await new Phase4Runner().RunAsync(cts.Token);
+            break;
 
-//Task<bool> customer1 = productRepository.ReserveStockAsync(productId, quantity, ct);
-//Task<bool> customer2 = productRepository.ReserveStockAsync(productId, quantity, ct);
+        case "all":
+            await new Phase1Runner(
+                store,
+                new IncomingOrderRepository(store),
+                new OrderRepository(store),
+                new SyncOrderValidator(
+                    new SyncCustomerRepository(store),
+                    new SyncProductRepository(store),
+                    new SyncCouponRepository(store)),
+                new OrderValidator(
+                    new CustomerRepository(store),
+                    new ProductRepository(store),
+                    new CouponRepository(store),
+                    new OrderRepository(store)))
+                .RunAsync(cts.Token);
 
-//bool result1 = await customer1;
-//bool result2 = await customer2;
+            await new Phase2Runner().RunAsync(cts.Token);
+            await new Phase3Runner().RunAsync(cts.Token);
+            await new Phase4Runner().RunAsync(cts.Token);
+            break;
 
-//Console.WriteLine($"Customer 1 reservation: {result1}");
-//Console.WriteLine($"Customer 2 reservation: {result2}");
-
-//Product? finalProduct = await productRepository.GetByIdAsync(productId, ct);
-
-//if (finalProduct is not null)
-//    Console.WriteLine($"Remaining stock: {finalProduct.StockQuantity}");
-
-
-#endregion
-
-#region Phase 1 Setup and Execution
-// Create Async Repositories
-CouponRepository couponRepository = new(store);
-OrderRepository orderRepository = new(store);
-IncomingOrderRepository incomingOrderRepository = new(store);
-
-// Create Async Validator
-OrderValidator orderValidator = new(
-    customerRepository,
-    productRepository,
-    couponRepository,
-    orderRepository);
-
-// Create Sync Repositories
-SyncCustomerRepository syncCustomerRepository = new(store);
-SyncProductRepository syncProductRepository = new(store);
-SyncCouponRepository syncCouponRepository = new(store);
-
-// Create Sync Validator
-SyncOrderValidator syncOrderValidator = new(
-    syncCustomerRepository,
-    syncProductRepository,
-    syncCouponRepository);
-
-// Create Phase 1 Runner
-Phase1Runner runner = new(
-    store,
-    incomingOrderRepository,
-    orderRepository,
-    syncOrderValidator,
-    orderValidator);
-
-// Run Phase 1
-await runner.RunAsync();
-
-#endregion
-
+        default:
+            Console.WriteLine("Unknown mode. Use phase1, phase2, phase3, phase4, or all.");
+            break;
+    }
+}
+catch (OperationCanceledException)
+{
+    Console.WriteLine("Operation cancelled.");
+}
